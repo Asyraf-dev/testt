@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Received Orders</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 80%; margin: 20px auto; }
+        .orders-container { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .order { border: 1px solid #ccc; padding: 10px; width: 250px; border-radius: 5px; position: relative; }
+        .preparing { background-color: #ffcccc; position: relative; }
+        .ready { background-color: #ccffcc; position: relative; }
+        h2 { text-align: center; }
+        .active-orders { text-align: center; margin-bottom: 20px; font-weight: bold; }
+        .cooking-animation::after {
+            content: '\1F469\200D\1F373'; /* chef gegirl emoji */
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 20px;
+            animation: cook 1s infinite alternate;
+        }
+        .ready-animation::after {
+            content: '\1F374'; /* sudu emoji */
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 20px;
+            animation: ready 1s infinite alternate;
+        }
+        @keyframes cook {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.2); }
+        }
+        @keyframes ready {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, onChildAdded, update, onValue } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDf...",
+            authDomain: "testt-c3750.firebaseapp.com",
+            databaseURL: "https://testt-c3750-default-rtdb.firebaseio.com",
+            projectId: "testt-c3750",
+            storageBucket: "testt-c3750.firebasestorage.app",
+            messagingSenderId: "697358376221",
+            appId: "1:697358376221:web:ca6bbc24746e008cdb15f4",
+            measurementId: "G-19EQYC273M"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const ordersRef = ref(db, 'orders/');
+
+        function displayOrder(order, orderId) {
+            const orderContainer = document.getElementById("orders");
+            const orderDiv = document.createElement("div");
+            orderDiv.classList.add("order", order.status === "ready" ? "ready" : "preparing");
+            if (order.status === "preparing") orderDiv.classList.add("cooking-animation");
+            orderDiv.innerHTML = `
+                <strong>Name:</strong> ${order.name}<br>
+                <strong>Table:</strong> ${order.table}<br>
+                <strong>Special Request:</strong> ${order.request}<br>
+                <strong>Items:</strong> 
+                <ul>
+                    ${order.cart.map(item => `<li>${item.item}-${item.quantity} <br>AddOns🫵👇<br>(${item.addOns})  <br>Harga: RM${item.price * item.quantity}</li>`).join('')}
+                </ul>
+                <strong>Total Harga💰:</strong> RM${order.totalPrice}<br>
+                <strong>Time:</strong> ${new Date(order.timestamp).toLocaleString()}<br>
+                <strong>Status:</strong> <span id="status-${orderId}">${order.status || "preparing"}</span><br>
+                <button onclick="updateStatus('${orderId}', 'ready')">Mark as Ready</button>
+                <button onclick="updateStatus('${orderId}', 'preparing')">Mark as Preparing</button>
+            `;
+            orderDiv.id = `order-${orderId}`;
+            orderContainer.prepend(orderDiv);
+        }
+
+        window.updateStatus = function(orderId, status) {
+            const orderRef = ref(db, `orders/${orderId}`);
+            update(orderRef, { status });
+            const orderDiv = document.getElementById(`order-${orderId}`);
+            orderDiv.classList.toggle("ready", status === "ready");
+            orderDiv.classList.toggle("preparing", status === "preparing");
+            orderDiv.classList.toggle("cooking-animation", status === "preparing");
+            orderDiv.classList.toggle("ready-animation", status === "ready");
+            document.getElementById(`status-${orderId}`).textContent = status;
+            updateActiveOrders();
+        };
+
+        function updateActiveOrders() {
+            onValue(ordersRef, snapshot => {
+                let activeCount = 0;
+                snapshot.forEach(childSnapshot => {
+                    const order = childSnapshot.val();
+                    if (order.status !== "ready") {
+                        activeCount++;
+                    }
+                });
+                document.getElementById("active-orders").textContent = `Active Orders (${activeCount})`;
+            });
+        }
+
+        onChildAdded(ordersRef, snapshot => {
+            const order = snapshot.val();
+            displayOrder(order, snapshot.key);
+            updateActiveOrders();
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h2>Received Orders</h2>
+        <div class="active-orders" id="active-orders">Active Orders (0)</div>
+        <div class="orders-container" id="orders"></div>
+    </div>
+</body>
+</html>

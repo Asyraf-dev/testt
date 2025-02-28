@@ -3,12 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script>
     <title>Order System</title>
     <style>
         body { font-family: Arial, sans-serif; }
         .container { width: 300px; margin: 20px auto; }
         .menu-item { margin: 10px 0; }
         button { cursor: pointer; }
+        .cart { border: 1px solid #ccc; padding: 10px; margin-top: 20px; }
+        .notification { 
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            background: #4CAF50; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 5px; 
+            display: none;
+        }
     </style>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
@@ -24,38 +38,781 @@
   appId: "1:697358376221:web:ca6bbc24746e008cdb15f4",
   measurementId: "G-19EQYC273M"
 };
+
         
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-
-        window.placeOrder = function(item, price) {
-            const order = { item, price, timestamp: new Date().toISOString() };
+        
+        let cart = [];
+        
+        window.addToCart = function(button) {
+            const itemElement = button.closest(".menuItem");
+            const item = itemElement.dataset.name;
+            let price = parseFloat(itemElement.dataset.price);
+            const quantity = parseInt(itemElement.querySelector(".quantity").value) || 1;
             
-            push(ref(db, 'orders/'), order)
+            let addOns = [];
+            itemElement.querySelectorAll(".addon-checkbox:checked").forEach(addon => {
+                price += parseFloat(addon.dataset.price);
+                addOns.push(addon.name);
+            });
+            
+            cart.push({ item, price, quantity, addOns });
+            updateCartView();
+            showNotification("Item added to cart!");
+        }
+
+        function updateCartView() {
+            const cartContainer = document.getElementById("cart-items");
+            const totalPriceContainer = document.getElementById("total-price");
+            cartContainer.innerHTML = "";
+            let total = 0;
+            cart.forEach((order, index) => {
+                total += order.price * order.quantity;
+                cartContainer.innerHTML += `<p>${order.item} x ${order.quantity} - RM${order.price * order.quantity} (Add-ons: ${order.addOns.join(", ")}) <button onclick="removeFromCart(${index})">Remove</button></p>`;
+            });
+            totalPriceContainer.innerText = `Total: RM${total}`;
+        }
+
+        document.getElementById("goToCartBtn").addEventListener("click", function() {
+    window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth" // Smooth scrolling animation
+    });
+});
+document.addEventListener("DOMContentLoaded", function () {
+    const filterOptions = document.querySelectorAll('input[name="filter"]');
+    const menuItems = document.querySelectorAll(".menuItem");
+
+    filterOptions.forEach(option => {
+        option.addEventListener("change", function () {
+            const selectedCategory = this.value;
+
+            menuItems.forEach(item => {
+                if (selectedCategory === "all" || item.getAttribute("data-category") === selectedCategory) {
+                    item.style.display = "block"; // Show item
+                } else {
+                    item.style.display = "none"; // Hide item
+                }
+            });
+        });
+    });
+});
+        
+        window.removeFromCart = function(index) {
+            cart.splice(index, 1);
+            updateCartView();
+        }
+        
+        function showNotification(message) {
+            const notification = document.getElementById("notification");
+            notification.innerText = message;
+            notification.style.display = "block";
+            setTimeout(() => { notification.style.display = "none"; }, 2000);
+        }
+        
+        window.submitOrder = function() {
+    const name = document.getElementById("customer-name").value;
+    const table = document.getElementById("table-number").value;
+    const request = document.getElementById("special-request").value;
+
+    if (cart.length === 0 || !name || !table) {
+        alert("Please fill all details and add items to cart.");
+        return;
+    }
+
+    // Calculate total price
+    let totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    const orderDetails = { 
+        name, 
+        table, 
+        request, 
+        cart, 
+        totalPrice, // Include total price in the order details
+        timestamp: new Date().toISOString() 
+    };
+            
+            push(ref(db, 'orders/'), orderDetails)
                 .then(() => console.log("Order saved"))
                 .catch(error => console.error("Error:", error));
-            
+
             fetch('https://discordapp.com/api/webhooks/1344888111800385546/Jja0S1EBXS0y1KCaKsHI6Ae6ETKkgrvr4qJ5HbgjCY7hE43S7WnFuTtcVGJ5_vtXJtlY', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: `New Order: ${item} - $${price}` })
+                body: JSON.stringify({ content: `New Order: ${JSON.stringify(orderDetails)}` })
             })
             .then(response => console.log('Order sent to Discord'))
             .catch(error => console.error('Error sending to Discord:', error));
+            
+            cart = [];
+            updateCartView();
+            alert("Order placed successfully!");
         }
     </script>
 </head>
 <body>
-    <div class="container">
-        <h2>Menu</h2>
-        <div class="menu-item">
-            <span>Ayam Geprek - $5</span>
-            <button onclick="placeOrder('Ayam Geprek', 5)">Order</button>
+    <div class="order-form-container">
+        <h1>SELAMAT DATANG KE RESTORAN AYAM GEPUK</h1>
+        <div class="menu-container">
+            <h2><strong>-Menu-</strong><br><br><br>
+
+    <!-- Filter Section with Icons -->
+    <div class="filter-container">
+        <label><input type="radio" name="filter" value="all" checked> <i class="all"></i> All</label>
+        <label><input type="radio" name="filter" value="food"> <i class="food"></i> Food (Set)</label>
+        <label><input type="radio" name="filter" value="Side Dish"> <i class="Side Dish"></i> Ala-Carte</label>
+        <label><input type="radio" name="filter" value="Air Panas"> <i class="Air Panas"></i> Air Panas</label>
+        <label><input type="radio" name="filter" value="Air Sejuk"> <i class="Air Sejuk"></i> Air Sejuk</label>
+        <label><input type="radio" name="filter" value="cart"> <i class="cart"></i> My Cart</label>
+    </div>
+</h2>
+            
+            
+            <!-- Set Ayam Gepuk -->
+            <div class="menuItem" data-price="10" data-name="Set Ayam Gepuk" data-category="food">
+                <img src="Set Ayam Gepuk.jpg" alt="Set Ayam Gepuk" class="foodImg">
+                <p class="red-text">Set Ayam Gepuk - RM 10.00 </p>
+                <label for="quantity1" >Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+                
+            </div>
+            <!-- Set Lele -->
+            <div class="menuItem" data-price="8" data-name="Set Lele" data-category="food">
+                <img src="Set lele.jpg" alt="Set Lele" class="foodImg">
+                <p class="red-text">Set Lele - RM 8.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Set Daging Balado -->
+            <div class="menuItem" data-price="9" data-name="Set Daging Balado" data-category="food">
+                <img src="Set Daging Balado.jpg" alt="Set Daging Balado" class="foodImg">
+                <p class="red-text">Set Daging Balado - RM 9.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Bakso -->
+            <div class="menuItem" data-price="7" data-name="Bakso" data-category="food">
+                <img src="Bakso Biasa.jpg" alt="Bakso" class="foodImg">
+                <p class="green-text">Bakso - RM 7.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Bakso Beranak 
+            <div class="menuItem" data-price="10" data-name="Bakso Beranak">
+                <img src="Bakso Beranak.jpg" alt="Bakso Beranak" class="foodImg">
+                <p>Bakso Beranak - RM 10.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Mee">Mee:</label>
+                    <input type="number" id="Mee" name="Mee" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Soon"><br>Soon:</label>
+                    <input type="number" id="Soon" name="Soon" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Maggi"><br>Maggi:</label>
+                    <input type="number" id="Maggi" name="Maggi" value="0" min="0" class="addon-quantity" data-price="0">               
+                </div>
+                <button onclick="addItem()" class="add-to-cart">Add to Cart</button>
+            </div>-->
+            <!-- Bakso Beranak Telur -->
+            <div class="menuItem" data-price="10" data-name="Bakso Beranak Telur" data-category="food">
+                <img src="Bakso Beranak Telur.jpg" alt="Bakso Beranak Telur" class="foodImg">
+                <p class="green-text">Bakso Beranak Telur - RM 10.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+
+            <!-- Bakso Mercun -->
+            <div class="menuItem" data-price="15" data-name="Bakso Mercun" data-category="food">
+                <img src="Bakso Mercun.jpg" alt="Bakso Mercun" class="foodImg">
+                <p class="green-text">Bakso Mercun - RM 15.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Bakso Special -->
+            <div class="menuItem" data-price="10" data-name="Bakso Special" data-category="food">
+                <img src="Bakso Special.jpg" alt="Bakso Special" class="foodImg">
+                <p class="green-text">Bakso Special - RM 10.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Ayam Sahaja -->
+            <div class="menuItem" data-price="8.5" data-name="Ayam Sahaja" data-category="Side Dish">
+                <p class="green-text">Ayam Sahaja - RM 8.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Peha">Peha (+RM0.00):</label>
+                    <input type="checkbox" id="Peha" name="Peha" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Kepak">Kepak (+RM0.00):</label>
+                    <input type="checkbox" id="Kepak" name="Kepak" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+                
+            <!-- Side Dish Lele Sahaja -->
+            <div class="menuItem" data-price="6.5" data-name="Lele Sahaja" data-category="Side Dish">
+                <p class="green-text">Lele Sahaja - RM 6.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Daging Sahaja -->
+            <div class="menuItem" data-price="7" data-name="Daging Sahaja" data-category="Side Dish">
+                <p class="green-text">Daging Sahaja - RM 7.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Bakso Kosong Sahaja -->
+            <div class="menuItem" data-price="5.5" data-name="Bakso Kosong" data-category="Side Dish">
+                <p class="green-text">Bakso Kosong - RM 5.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Sambal Sahaja -->
+            <div class="menuItem" data-price="2" data-name="Sambal Gepuk" data-category="Side Dish">
+                <p class="green-text">Sambal Gepuk- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2" data-name="Sambal Balado" data-category="Side Dish">
+                <p class="green-text">Sambal Balado- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air ES Buah -->
+            <div class="menuItem" data-price="5.5" data-name="Es Buah" data-category="Air Sejuk">
+                <p class="blue-text">Es Buah - RM 5.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh O -->
+            <div class="menuItem" data-price="1.5" data-name="Teh O Panas" data-category="Air Panas">
+                <p class="red-text">Teh O Panas - RM 1.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.0" data-name="Teh O Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh O Ais - RM 2 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Kopi O -->
+            <div class="menuItem" data-price="1.5" data-name="Kopi O Panas" data-category="Air Panas">
+                <p class="red-text">Kopi O Panas - RM 1.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.0" data-name="Kopi O Ais" data-category="Air Sejuk">
+                <p class="blue-text">Kopi O Ais - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Milo O 
+            <div class="menuItem" data-price="2.5" data-name="Milo O">
+                <p>Milo O - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Nescafe O -->
+            <div class="menuItem" data-price="2.5" data-name="Nescafe O Panas" data-category="Air Panas">
+                <p class="red-text">Nescafe O Panas - RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.0" data-name="Nescafe O Ais" data-category="Air Sejuk">
+                <p class="blue-text">Nescafe O Ais - RM 3.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh -->
+            <div class="menuItem" data-price="2.0" data-name="Teh Panas" data-category="Air Panas">
+                <p class="red-text">Teh Panas- RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.5" data-name="Teh Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh Ais- RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Kopi -->
+            <div class="menuItem" data-price="2.0" data-name="Kopi Panas" data-category="Air Panas">
+                <p class="red-text">Kopi Panas - RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.5" data-name="Kopi Ais" data-category="Air Sejuk">
+                <p class="blue-text">Kopi Ais - RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Milo 
+            <div class="menuItem" data-price="3.0" data-name="Milo">
+                <p>Milo - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Nescafe -->
+            <div class="menuItem" data-price="3.0" data-name="Nescafe Panas" data-category="Air Panas">
+                <p class="red-text">Nescafe Panas - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.5" data-name="Nescafe Ais" data-category="Air Sejuk">
+                <p class="blue-text">Nescafe Ais - RM 3.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Horlick 
+            <div class="menuItem" data-price="4.0" data-name="Horlick">
+                <p>Horlick - RM 4.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Neslo 
+            <div class="menuItem" data-price="3.50" data-name="Neslo">
+                <p>Neslo - RM 3.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Sirap -->
+            <div class="menuItem" data-price="1.50" data-name="Sirap Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Panas - RM 1.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.0" data-name="Sirap Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Ais - RM 1.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Selasih -->
+            <div class="menuItem" data-price="1.80" data-name="Sirap Selasih Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Selasih Panas- RM 1.80</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.30" data-name="Sirap Selasih Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Selasih Ais- RM 2.30</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Limau -->
+            <div class="menuItem" data-price="2.00" data-name="Sirap Limau Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Limau Panas - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Sirap Limau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Limau Ais - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Laici -->
+            <div class="menuItem" data-price="2.50" data-name="Sirap Laici Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Laici Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Sirap Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Laici Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh O Limau -->
+            <div class="menuItem" data-price="2.00" data-name="Teh O Limau Panas" data-category="Air Panas">
+                <p class="red-text">Teh O Limau Panas- - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Teh O Limau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh O Limau Ais- - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh O Laici -->
+            <div class="menuItem" data-price="2.50" data-name="Teh O Laici Panas" data-category="Air Panas">
+                <p class="red-text">Teh O Laici Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Teh O Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh O Laici Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Bandung -->
+            <div class="menuItem" data-price="2.00" data-name="Sirap Bandung Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Bandung Panas - RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Sirap Bandung Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Bandung Ais - RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Bandung Cincau -->
+            <div class="menuItem" data-price="2.50" data-name="Sirap Bandung Cincau Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Bandung Cincau Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Sirap Bandung Cincau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Bandung Cincau Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh Cincau -->
+            <div class="menuItem" data-price="2.50" data-name="Teh Cincau Panas" data-category="Air Panas">
+                <p class="red-text">Teh Cincau Panas- RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Teh Cincau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh Cincau Ais- RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Limau -->
+            <div class="menuItem" data-price="1.50" data-name="Limau Panas" data-category="Air Panas">
+                <p class="red-text">Limau Panas - RM 1.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.00" data-name="Limau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Limau Ais - RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sanquick -->
+            <div class="menuItem" data-price="2.00" data-name="Sanquick Panas" data-category="Air Panas">
+                <p class="red-text">Sanquick Panas - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Sanquick Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sanquick Ais - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sanquick Laici -->
+            <div class="menuItem" data-price="2.50" data-name="Sanquick Laici Panas" data-category="Air Panas">
+                <p class="red-text">Sanquick Laici Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Sanquick Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sanquick Laici Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Limau Laici -->
+            <div class="menuItem" data-price="3.00" data-name="Sanquick Laici Panas" data-category="Air Panas">
+                <p class="red-text">Sanquick Laici Panas - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.50" data-name="Sanquick Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sanquick Laici Ais - RM 3.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air ExtraJoss Anggur -->
+            <div class="menuItem" data-price="2.50" data-name="ExtraJoss Anggur Susu" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Anggur Susu- RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.00" data-name="ExtraJoss Anggur" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Anggur Gula- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air ExtraJoss Mangga -->
+            <div class="menuItem" data-price="2.50" data-name="ExtraJoss Mangga Susu" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Mangga Susu- RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.00" data-name="ExtraJoss Mangga Gula" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Mangga Gula- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air kosong -->
+            <div class="menuItem" data-price="0.00" data-name="Air Panas"data-category="Air Panas">
+                <p class="red-text">Air Panas - RM 0.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Suam">Suam (+RM0.00):</label>
+                    <input type="checkbox" id="Suam" name="Suam" class="addon-checkbox" data-price="0.0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="0.50" data-name="Air Kosong" data-category="Air Sejuk">
+                <p class="blue-text">Air Kosong - RM 0.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
         </div>
-        <div class="menu-item">
-            <span>Coffee - $3</span>
-            <button onclick="placeOrder('Coffee', 3)">Order</button>
+        
+        <button id="goToCartBtn" class="cart-button">
+            🛒 Go to Cart <span id="cartCount" class="cart-count" ></span>
+        </button>
+        
+        <div class="cart">
+            <h3>🛒Cart</h3>
+            <div id="cart-items"></div>
+            <p id="total-price">Total: RM0 [Harga yang dipamerkan untuk rujukan sahaja. Terdapat perubahan jika berlaku kesilapan]</p>
+                <input type="text" id="customer-name" placeholder="👤 Name" required>
+                <input type="text" id="table-number" placeholder="🪑 Table No" required>
+                <input type="text" id="special-request" placeholder="✏️ Special Request">           
+                <button onclick="submitOrder()">Submit Order</button>
         </div>
     </div>
+    <div id="notification" class="notification"></div>
 </body>
 </html>
