@@ -63,34 +63,53 @@
             orderDiv.classList.add("order", order.status === "ready" ? "ready" : "preparing");
             if (order.status === "preparing") orderDiv.classList.add("cooking-animation");
             orderDiv.innerHTML = `
-                <strong>Name:</strong> ${order.name}<br>
-                <strong>Table:</strong> ${order.table}<br>
-                <strong>Special Request:</strong> ${order.request}<br>
+                <strong>Name:</strong> <span class="order-name">${order.name}</span><br>
+                <strong>Table:</strong> <span class="order-table">${order.table}</span><br>
+                <strong>Special Request:</strong> <span class="order-request">${order.request}</span><br>
                 <strong>Items:</strong> 
-                <ul>
-                    ${order.cart.map(item => `<li>${item.item}-${item.quantity} <br>AddOns🫵👇<br>(${item.addOns})  <br>Harga: RM${item.price * item.quantity}</li>`).join('')}
+                <ul class="order-items">
+                    ${order.cart.map(item => `<li>${item.item}-${item.quantity} (${item.addOns}) - RM${item.price * item.quantity}</li>`).join('')}
                 </ul>
-                <strong>Total Harga💰:</strong> RM${order.totalPrice}<br>
-                <strong>Time:</strong> ${new Date(order.timestamp).toLocaleString()}<br>
-                <strong>Status:</strong> <span id="status-${orderId}">${order.status || "preparing"}</span><br>
+                <strong>Total Harga💰:</strong> <span class="order-total">RM${order.totalPrice}</span><br>
+                <strong>Time:</strong> <span class="order-time">${new Date(order.timestamp).toLocaleString()}</span><br>
+                <strong>Status:</strong> <span class="order-status">${order.status || "preparing"}</span><br>
                 <button onclick="updateStatus('${orderId}', 'ready')">Mark as Ready</button>
                 <button onclick="updateStatus('${orderId}', 'preparing')">Mark as Preparing</button>
             `;
             orderDiv.id = `order-${orderId}`;
             orderContainer.prepend(orderDiv);
         }
+        
 
-        window.updateStatus = function(orderId, status) {
-            const orderRef = ref(db, `orders/${orderId}`);
-            update(orderRef, { status });
-            const orderDiv = document.getElementById(`order-${orderId}`);
-            orderDiv.classList.toggle("ready", status === "ready");
-            orderDiv.classList.toggle("preparing", status === "preparing");
-            orderDiv.classList.toggle("cooking-animation", status === "preparing");
-            orderDiv.classList.toggle("ready-animation", status === "ready");
-            document.getElementById(`status-${orderId}`).textContent = status;
-            updateActiveOrders();
-        };
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,Date,Time,Name,Table,Special Request,Items,Total Price,Status\n";
+            document.querySelectorAll(".order").forEach(orderDiv => {
+                const name = orderDiv.querySelector(".order-name")?.textContent.trim() || "";
+                const table = orderDiv.querySelector(".order-table")?.textContent.trim() || "";
+                const request = orderDiv.querySelector(".order-request")?.textContent.trim() || "";
+                const items = Array.from(orderDiv.querySelectorAll(".order-items li")).map(li => li.innerText).join(" | ") || "";
+                const totalPrice = orderDiv.querySelector(".order-total")?.textContent.trim() || "";
+                const time = orderDiv.querySelector(".order-time")?.textContent.trim() || "";
+                const status = orderDiv.querySelector(".order-status")?.textContent.trim() || "";
+                csvContent += `${time},${name},${table},${request},"${items}",${totalPrice},${status}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "orders.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const exportBtn = document.createElement("button");
+            exportBtn.textContent = "Export to CSV";
+            exportBtn.onclick = exportToCSV;
+            document.querySelector(".container").prepend(exportBtn);
+        });
+
+        
 
         function updateActiveOrders() {
             onValue(ordersRef, snapshot => {
@@ -110,6 +129,18 @@
             displayOrder(order, snapshot.key);
             updateActiveOrders();
         });
+
+        window.updateStatus = function(orderId, status) {
+            const orderRef = ref(db, `orders/${orderId}`);
+            update(orderRef, { status });
+            const orderDiv = document.getElementById(`order-${orderId}`);
+            orderDiv.classList.toggle("ready", status === "ready");
+            orderDiv.classList.toggle("preparing", status === "preparing");
+            orderDiv.classList.toggle("cooking-animation", status === "preparing");
+            orderDiv.classList.toggle("ready-animation", status === "ready");
+            /*document.getElementById(`status-${orderId}`).textContent = status; kalau On line ni error naik */
+            updateActiveOrders();
+        };
     </script>
 </head>
 <body>
