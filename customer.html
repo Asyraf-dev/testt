@@ -144,7 +144,7 @@
                                 setTimeout(() => {
                                     readyQueue = readyQueue.filter(num => num !== queueNumber);
                                     document.getElementById("readyQueue").innerText = readyQueue.length ? readyQueue.join(", ") : "No orders";
-                                }, 1000); // Remove after 1 second
+                                }, 200000); // Remove after 1 second
                             }
                         }
                     }
