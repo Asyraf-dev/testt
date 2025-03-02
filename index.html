@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script>
-    <title>Order System</title>
+    <link rel="stylesheets" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <title>Ayam Gepuk Ngences X Little Ngences</title>
     <style>
         body { font-family: Arial, sans-serif; }
         .container { width: 300px; margin: 20px auto; }
@@ -26,7 +25,7 @@
     </style>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-        import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+        import { getDatabase, ref, get, push } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
         const firebaseConfig = {
   apiKey: "AIzaSyDfA0ilImHZfUsP1HS3xy9VCfs9n0I95VE",
@@ -110,45 +109,91 @@ document.addEventListener("DOMContentLoaded", function () {
             notification.style.display = "block";
             setTimeout(() => { notification.style.display = "none"; }, 2000);
         }
-        
-        window.submitOrder = function() {
+
+
+        // Function to get the last queue number from Firebase
+        function getLastQueueNumber() {
+    const ordersRef = ref(db, 'orders');
+
+    return get(ordersRef)
+        .then(snapshot => {
+            if (snapshot.exists()) {
+                const orders = snapshot.val();
+                const queueNumbers = Object.values(orders)
+                    .map(order => order.queueNumber)
+                    .filter(num => typeof num === 'number' && !isNaN(num)); // Filter out invalid values
+                
+                return queueNumbers.length > 0 ? Math.max(...queueNumbers) : 0;
+            }
+            return 7000; // If no orders exist, start from 0
+        })
+        .catch(error => {
+            console.error("Error fetching queue number:", error);
+            return 0; // Fallback value
+        });
+}
+
+
+
+    window.submitOrder = function() {
+    const submitButton = document.getElementById("submit-button");
+    submitButton.disabled = true;
+    submitButton.innerHTML = "Submitting...";
+    
     const name = document.getElementById("customer-name").value;
     const table = document.getElementById("table-number").value;
     const request = document.getElementById("special-request").value;
 
     if (cart.length === 0 || !name || !table) {
         alert("Please fill all details and add items to cart.");
+        submitButton.disabled = false;
+        submitButton.innerHTML = "Submit Order";
         return;
     }
 
-    // Calculate total price
-    let totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    getLastQueueNumber().then(lastQueue => {
+    const queueNumber = Number(lastQueue) + 1; // Ensure it's a valid number
 
-    const orderDetails = { 
-        name, 
-        table, 
-        request, 
-        cart, 
-        totalPrice, // Include total price in the order details
-        timestamp: new Date().toISOString() 
-    };
-            
-            push(ref(db, 'orders/'), orderDetails)
-                .then(() => console.log("Order saved"))
-                .catch(error => console.error("Error:", error));
+    if (isNaN(queueNumber)) {
+        console.error("Invalid queue number:", queueNumber);
+        alert("Error: Queue number is invalid. Please try again.");
+        return;
+    }
+        let totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-            fetch('https://discordapp.com/api/webhooks/1344888111800385546/Jja0S1EBXS0y1KCaKsHI6Ae6ETKkgrvr4qJ5HbgjCY7hE43S7WnFuTtcVGJ5_vtXJtlY', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: `New Order: ${JSON.stringify(orderDetails)}` })
+        const orderDetails = { 
+            queueNumber, 
+            name, 
+            table, 
+            request, 
+            cart, 
+            totalPrice, 
+            timestamp: new Date().toISOString() 
+        };
+
+        push(ref(db, 'orders/'), orderDetails)
+            .then(() => {
+                console.log("Order saved");
+                alert(`Order placed successfully✅\nAssalamualaikum dan Salam Sejahtera Mr/Mrs ${name}\n Nombor Giliran Anda ialah ${queueNumber}`);
+                cart = [];
+                updateCartView();
             })
-            .then(response => console.log('Order sent to Discord'))
-            .catch(error => console.error('Error sending to Discord:', error));
-            
-            cart = [];
-            updateCartView();
-            alert("Order placed successfully!");
-        }
+            .catch(error => console.error("Error:", error))
+            .finally(() => {
+                submitButton.disabled = false;
+                submitButton.innerHTML = "Submit Order";
+            });
+
+        fetch('https://discordapp.com/api/webhooks/1344888111800385546/Jja0S1EBXS0y1KCaKsHI6Ae6ETKkgrvr4qJ5HbgjCY7hE43S7WnFuTtcVGJ5_vtXJtlY', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: `New Order: ${JSON.stringify(orderDetails)}` })
+        })
+        .then(response => console.log('Order sent to Discord'))
+        .catch(error => console.error('Error sending to Discord:', error));
+    });
+};
+
     </script>
 </head>
 <body>
@@ -810,7 +855,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <input type="text" id="customer-name" placeholder="👤 Name" required>
                 <input type="text" id="table-number" placeholder="🪑 Table No" required>
                 <input type="text" id="special-request" placeholder="✏️ Special Request">           
-                <button onclick="submitOrder()">Submit Order</button>
+                <button id= "submit-button" onclick="submitOrder()">Submit Order</button>
         </div>
     </div>
     <div id="notification" class="notification"></div>

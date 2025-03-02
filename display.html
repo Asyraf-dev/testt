@@ -63,12 +63,13 @@
             orderDiv.classList.add("order", order.status === "ready" ? "ready" : "preparing");
             if (order.status === "preparing") orderDiv.classList.add("cooking-animation");
             orderDiv.innerHTML = `
+                <strong>Order Number:</strong> <span>${order.queueNumber}</span><br>
                 <strong>Name:</strong> <span class="order-name">${order.name}</span><br>
                 <strong>Table:</strong> <span class="order-table">${order.table}</span><br>
                 <strong>Special Request:</strong> <span class="order-request">${order.request}</span><br>
                 <strong>Items:</strong> 
                 <ul class="order-items">
-                    ${order.cart.map(item => `<li>${item.item}-${item.quantity} (${item.addOns}) - RM${item.price * item.quantity}</li>`).join('')}
+                    ${order.cart.map(item => `<li>${item.item}-${item.quantity} <br> AddOn:🫵👇 <br>(${item.addOns || "tiada"}) - RM${item.price * item.quantity}</li>`).join('')}
                 </ul>
                 <strong>Total Harga💰:</strong> <span class="order-total">RM${order.totalPrice}</span><br>
                 <strong>Time:</strong> <span class="order-time">${new Date(order.timestamp).toLocaleString()}</span><br>
@@ -131,16 +132,32 @@
         });
 
         window.updateStatus = function(orderId, status) {
-            const orderRef = ref(db, `orders/${orderId}`);
-            update(orderRef, { status });
-            const orderDiv = document.getElementById(`order-${orderId}`);
-            orderDiv.classList.toggle("ready", status === "ready");
-            orderDiv.classList.toggle("preparing", status === "preparing");
-            orderDiv.classList.toggle("cooking-animation", status === "preparing");
-            orderDiv.classList.toggle("ready-animation", status === "ready");
-            /*document.getElementById(`status-${orderId}`).textContent = status; kalau On line ni error naik */
-            updateActiveOrders();
-        };
+    const orderRef = ref(db, `orders/${orderId}`);
+    update(orderRef, { status });
+
+    const orderDiv = document.getElementById(`order-${orderId}`);
+    orderDiv.classList.toggle("ready", status === "ready");
+    orderDiv.classList.toggle("preparing", status === "preparing");
+    orderDiv.classList.toggle("cooking-animation", status === "preparing");
+    orderDiv.classList.toggle("ready-animation", status === "ready");
+
+    updateActiveOrders();
+
+    // If marked as ready, remove queueNumber after 5 minutes
+    if (status === "ready") {
+        setTimeout(() => {
+            update(orderRef, { queueNumber: null }).then(() => {
+                const queueSpan = orderDiv.querySelector("span"); 
+                if (queueSpan) {
+                    queueSpan.textContent = "N/A"; // Replace with "N/A" or remove it
+                }
+            }).catch(error => {
+                console.error("Error removing queue number:", error);
+            });
+        }, 600000); // 10 minutes from latest order akan reset
+    }
+};
+
     </script>
 </head>
 <body>
@@ -149,5 +166,6 @@
         <div class="active-orders" id="active-orders">Active Orders (0)</div>
         <div class="orders-container" id="orders"></div>
     </div>
+    
 </body>
 </html>

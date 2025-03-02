@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queue Status</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 750px;
+            margin: 50px auto;
+            padding: 30px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 180px;
+            height: auto;
+        }
+
+        .restaurant-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .queue-boxes {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .queue-box {
+            flex: 1;
+            padding: 25px;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .queue-box h2 {
+            font-size: 22px;
+            margin-bottom: 12px;
+        }
+
+        .preparing {
+            background-color: #ffc107;
+            color: #212529;
+        }
+
+        .ready {
+            background-color: #28a745;
+            color: white;
+        }
+
+        @media (max-width: 700px) {
+            .queue-boxes {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="logo.png" alt="Company Logo" class="logo">
+            <div class="restaurant-name">Order Monitoring [Live Update]</div>
+        </div>
+        
+        <div class="queue-boxes">
+            <div class="queue-box preparing">
+                <h2>Preparing</h2>
+                <p id="preparingQueue">Loading...</p>
+            </div>
+            <div class="queue-box ready">
+                <h2>Ready</h2>
+                <p id="readyQueue">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration (Replace with your actual credentials)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDf...",
+            authDomain: "testt-c3750.firebaseapp.com",
+            databaseURL: "https://testt-c3750-default-rtdb.firebaseio.com",
+            projectId: "testt-c3750",
+            storageBucket: "testt-c3750.firebasestorage.app",
+            messagingSenderId: "697358376221",
+            appId: "1:697358376221:web:ca6bbc24746e008cdb15f4",
+            measurementId: "G-19EQYC273M"
+        };
+
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        function updateQueueNumbers() {
+            const ordersRef = database.ref("orders");
+
+            ordersRef.on("value", (snapshot) => {
+                console.log("Firebase data snapshot received:", snapshot.val());
+
+                if (snapshot.exists()) {
+                    const ordersData = snapshot.val();
+                    let preparingQueue = [];
+                    let readyQueue = [];
+
+                    Object.values(ordersData).forEach(order => {
+                    if (order.status) {
+                        let status = order.status.trim().toLowerCase();
+                        let queueNumber = order.queueNumber;
+
+                        // Ensure queueNumber is valid and not "Unknown"
+                        if (queueNumber && queueNumber !== "Unknown") {
+                            if (status === "preparing") {
+                                preparingQueue.push(queueNumber);
+                            } else if (status === "ready") {
+                                readyQueue.push(queueNumber);
+                                setTimeout(() => {
+                                    readyQueue = readyQueue.filter(num => num !== queueNumber);
+                                    document.getElementById("readyQueue").innerText = readyQueue.length ? readyQueue.join(", ") : "No orders";
+                                }, 1000); // Remove after 1 second
+                            }
+                        }
+                    }
+                });
+
+                    document.getElementById("preparingQueue").innerText = preparingQueue.length ? preparingQueue.join(", ") : "No orders";
+                    document.getElementById("readyQueue").innerText = readyQueue.length ? readyQueue.join(", ") : "No orders";
+                } else {
+                    document.getElementById("preparingQueue").innerText = "No active orders";
+                    document.getElementById("readyQueue").innerText = "No active orders";
+                }
+            }, (error) => {
+                console.error("Firebase read error:", error);
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", updateQueueNumbers);
+    </script>
+
+<footer>
+    <p><b>Little Ngences X Ayam Gepuk Ngences</b></p>
+    <p>&copy; 2024 electricaltechnologymy. All rights reserved.</p>
+    <p> 
+        
+        <a href="https://wa.me/+60176977263">Contact Us</a> |
+        <a href="https://www.instagram.com/littlengencescoffee?igsh=MWZhZmM4YXcyc2Fraw=="target="_blank">Instagram</a> |
+        <a href="https://www.tiktok.com/@little.ngences.co?_t=8nzZDYmHXhg&_r=1"target="_blank">Tiktok</a> |
+        <a href="https://batugajahdev.wixstudio.io/little-ngences"target="_blank">Visit Little Ngences</a>
+    </p>
+</footer>
+</body>
+</html>
