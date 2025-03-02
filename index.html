@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheets" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script>
     <title>Ayam Gepuk Ngences X Little Ngences</title>
     <style>
         body { font-family: Arial, sans-serif; }
@@ -58,7 +59,7 @@
             
             cart.push({ item, price, quantity, addOns });
             updateCartView();
-            showNotification("Item added to cart!");
+            showNotification(`${item}(${addOns}) - ${quantity} Add To Cart`);
         }
 
         function updateCartView() {
@@ -174,10 +175,11 @@ document.addEventListener("DOMContentLoaded", function () {
         push(ref(db, 'orders/'), orderDetails)
             .then(() => {
                 console.log("Order saved");
-                alert(`Order placed successfully✅\nAssalamualaikum dan Salam Sejahtera Mr/Mrs ${name}\n Nombor Giliran Anda ialah ${queueNumber}`);
+                alert(`Order placed successfully✅\nAssalamualaikum dan Salam Sejahtera Mr/Mrs ${name}\nNombor Giliran Anda ialah ${queueNumber}\nNama:${name}\nMeja:${table}\nSpecial Request:${request}\nMenu Pilihan:${orderDetails.cart.map(item => `${item.item} ${item.addOns} x ${item.quantity} (RM${item.price})`).join('\n')}\nTotal Harga:RM${totalPrice}`);
                 cart = [];
                 updateCartView();
             })
+            
             .catch(error => console.error("Error:", error))
             .finally(() => {
                 submitButton.disabled = false;
@@ -194,6 +196,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 };
 
+
     </script>
 </head>
 <body>
@@ -204,12 +207,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     <!-- Filter Section with Icons -->
     <div class="filter-container">
-        <label><input type="radio" name="filter" value="all" checked> <i class="all"></i> All</label>
-        <label><input type="radio" name="filter" value="food"> <i class="food"></i> Food (Set)</label>
-        <label><input type="radio" name="filter" value="Side Dish"> <i class="Side Dish"></i> Ala-Carte</label>
-        <label><input type="radio" name="filter" value="Air Panas"> <i class="Air Panas"></i> Air Panas</label>
-        <label><input type="radio" name="filter" value="Air Sejuk"> <i class="Air Sejuk"></i> Air Sejuk</label>
-        <label><input type="radio" name="filter" value="cart"> <i class="cart"></i> My Cart</label>
+        <label><input type="radio" name="filter" value="all" checked>📋All</label>
+        <label><input type="radio" name="filter" value="food">🍽️Food (Set)</label>
+        <label><input type="radio" name="filter" value="Side Dish">🔖Ala-Carte</label>
+        <label><input type="radio" name="filter" value="Air Panas"><i class="fas fa-mug-hot"></i>Air Panas</label>
+        <label><input type="radio" name="filter" value="Air Sejuk"><i class="fas fa-glass-whiskey"></i>Air Sejuk</label>
+        <label><input type="radio" name="filter" value="cart">🛒My Cart</label>
     </div>
 </h2>
             
@@ -853,11 +856,26 @@ document.addEventListener("DOMContentLoaded", function () {
             <div id="cart-items"></div>
             <p id="total-price">Total: RM0 [Harga yang dipamerkan untuk rujukan sahaja. Terdapat perubahan jika berlaku kesilapan]</p>
                 <input type="text" id="customer-name" placeholder="👤 Name" required>
-                <input type="text" id="table-number" placeholder="🪑 Table No" required>
+                <input type="text" id="table-number" placeholder="🪑 Table No " required><br>
                 <input type="text" id="special-request" placeholder="✏️ Special Request">           
                 <button id= "submit-button" onclick="submitOrder()">Submit Order</button>
+                
         </div>
     </div>
     <div id="notification" class="notification"></div>
+
+    <footer>
+        <a href="customer.html" class="ribbon-button">Monitoring Order[LIVE]</a>
+        <p><b>Little Ngences X Ayam Gepuk Ngences</b></p>
+        <p>&copy; 2024 electricaltechnologymy. All rights reserved.</p>
+        
+        <p> 
+            
+            <a href="https://wa.me/+60176977263">Contact Us</a> |
+            <a href="https://www.instagram.com/littlengencescoffee?igsh=MWZhZmM4YXcyc2Fraw=="target="_blank">Instagram</a> |
+            <a href="https://www.tiktok.com/@little.ngences.co?_t=8nzZDYmHXhg&_r=1"target="_blank">Tiktok</a> |
+            <a href="https://batugajahdev.wixstudio.io/little-ngences"target="_blank">Visit Little Ngences</a>
+        </p>
+    </footer>
 </body>
 </html>
