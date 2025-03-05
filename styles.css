@@ -355,6 +355,10 @@ footer a:hover {
     color: green;
     font-weight: bold;
 }
+.brown-text {
+    color: brown;
+    font-weight: bold;
+}
 .blue-text {
     color: rgb(0, 60, 255);
     font-weight: bold;
@@ -500,4 +504,40 @@ input[type="text"] {
 .print-btn {
     background: green;
     color: white;
+}
+
+@keyframes rainbow {
+    0% { color: red; }
+    16% { color: orange; }
+    32% { color: yellow; }
+    48% { color: green; }
+    64% { color: blue; }
+    80% { color: indigo; }
+    100% { color: violet; }
+  }
+  
+  .rainbow-animated {
+    font-size: 18px;
+    font-weight: bold;
+    animation: rainbow 3s infinite linear;
+  }
+
+  @keyframes shine {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.premium-animated {
+  background: linear-gradient(90deg, 
+    #FFD700, #FFA500, #FF4500, #FF1493, #8A2BE2, #1E90FF, #00FF7F);
+  background-size: 400% 400%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 16px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 2px 2px 5px rgba(255, 215, 0, 0.5);
+  animation: shine 5s infinite linear;
 }
