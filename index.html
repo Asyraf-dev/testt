@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://kit.fontawesome.com/your-kit-id.js" crossorigin="anonymous"></script>
+    <title>Ayam Gepuk Ngences X Little Ngences</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 300px; margin: 20px auto; }
+        .menu-item { margin: 10px 0; }
+        button { cursor: pointer; }
+        .cart { border: 1px solid #ccc; padding: 10px; margin-top: 20px; }
+        .notification { 
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            background: #4CAF50; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 5px; 
+            display: none;
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, get, push } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+        const firebaseConfig = {
+  apiKey: "AIzaSyDfA0ilImHZfUsP1HS3xy9VCfs9n0I95VE",
+  authDomain: "testt-c3750.firebaseapp.com",
+  databaseURL: "https://testt-c3750-default-rtdb.firebaseio.com",
+  projectId: "testt-c3750",
+  storageBucket: "testt-c3750.firebasestorage.app",
+  messagingSenderId: "697358376221",
+  appId: "1:697358376221:web:ca6bbc24746e008cdb15f4",
+  measurementId: "G-19EQYC273M"
+};
+
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        let cart = [];
+        
+        window.addToCart = function(button) {
+            const itemElement = button.closest(".menuItem");
+            const item = itemElement.dataset.name;
+            let price = parseFloat(itemElement.dataset.price);
+            const quantity = parseInt(itemElement.querySelector(".quantity").value) || 1;
+            
+            let addOns = [];
+            itemElement.querySelectorAll(".addon-checkbox:checked").forEach(addon => {
+                price += parseFloat(addon.dataset.price);
+                addOns.push(addon.name);
+            });
+            
+            cart.push({ item, price, quantity, addOns });
+            updateCartView();
+            showNotification(`${item}(${addOns}) - ${quantity} Add To Cart`);
+        }
+
+        function updateCartView() {
+            const cartContainer = document.getElementById("cart-items");
+            const totalPriceContainer = document.getElementById("total-price");
+            cartContainer.innerHTML = "";
+            let total = 0;
+            cart.forEach((order, index) => {
+                total += order.price * order.quantity;
+                cartContainer.innerHTML += `<p>${order.item} x ${order.quantity} - RM${order.price * order.quantity} (Add-ons: ${order.addOns.join(", ")}) <button onclick="removeFromCart(${index})">Remove</button></p>`;
+            });
+            totalPriceContainer.innerText = `Total: RM${total}`;
+        }
+
+        document.getElementById("goToCartBtn").addEventListener("click", function() {
+    window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth" // Smooth scrolling animation
+    });
+});
+document.addEventListener("DOMContentLoaded", function () {
+    const filterOptions = document.querySelectorAll('input[name="filter"]');
+    const menuItems = document.querySelectorAll(".menuItem");
+
+    function applyFilter(selectedCategory) {
+        menuItems.forEach(item => {
+            const category = item.getAttribute("data-category").trim();
+
+            if (selectedCategory === "all") {
+                // Show everything EXCEPT 'Little Ngences (Food)' and 'Little Ngences (Drink)'
+                if (category !== "Little Ngences Food" && category !== "Little Ngences Drink") {
+                    item.style.display = "block";
+                } else {
+                    item.style.display = "none";
+                }
+            } else {
+                // Show only selected category
+                item.style.display = category === selectedCategory ? "block" : "none";
+            }
+        });
+    }
+
+    // Add event listener to all filter options
+    filterOptions.forEach(option => {
+        option.addEventListener("change", function () {
+            applyFilter(this.value);
+        });
+    });
+
+    // ✅ Automatically trigger "All" filter on page load
+    const defaultFilter = document.querySelector('input[name="filter"][value="all"]');
+    if (defaultFilter) {
+        defaultFilter.checked = true; // Ensure "All" is selected
+        applyFilter("all"); // Apply the filter on page load
+    }
+});
+
+
+        
+        window.removeFromCart = function(index) {
+            cart.splice(index, 1);
+            updateCartView();
+        }
+        
+        function showNotification(message) {
+            const notification = document.getElementById("notification");
+            notification.innerText = message;
+            notification.style.display = "block";
+            setTimeout(() => { notification.style.display = "none"; }, 2000);
+        }
+
+
+        // Function to get the last queue number from Firebase
+        function getLastQueueNumber() {
+    const ordersRef = ref(db, 'orders');
+
+    return get(ordersRef)
+        .then(snapshot => {
+            if (snapshot.exists()) {
+                const orders = snapshot.val();
+                const queueNumbers = Object.values(orders)
+                    .map(order => order.queueNumber)
+                    .filter(num => typeof num === 'number' && !isNaN(num)); // Filter out invalid values
+                
+                return queueNumbers.length > 0 ? Math.max(...queueNumbers) : 0;
+            }
+            return 7000; // If no orders exist, start from 0
+        })
+        .catch(error => {
+            console.error("Error fetching queue number:", error);
+            return 8000; // Fallback value
+        });
+}
+
+
+
+    window.submitOrder = function() {
+    const submitButton = document.getElementById("submit-button");
+    submitButton.disabled = true;
+    submitButton.innerHTML = "Submitting...";
+    
+    const name = document.getElementById("customer-name").value;
+    const table = document.getElementById("table-number").value;
+    const request = document.getElementById("special-request").value;
+
+    if (cart.length === 0 || !name || !table) {
+        alert("Please fill all details and add items to cart.");
+        submitButton.disabled = false;
+        submitButton.innerHTML = "Submit Order";
+        return;
+    }
+
+    getLastQueueNumber().then(lastQueue => {
+    const queueNumber = Number(lastQueue) + 1; // Ensure it's a valid number
+
+    if (isNaN(queueNumber)) {
+        console.error("Invalid queue number:", queueNumber);
+        alert("Error: Queue number is invalid. Please try again.");
+        return;
+    }
+        let totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        const orderDetails = { 
+            queueNumber, 
+            name, 
+            table, 
+            request, 
+            cart, 
+            totalPrice, 
+            timestamp: new Date().toISOString() 
+        };
+
+        push(ref(db, 'orders/'), orderDetails)
+            .then(() => {
+                console.log("Order saved");
+                alert(`Order placed successfully✅\nAssalamualaikum dan Salam Sejahtera Mr/Mrs ${name}\nNombor Giliran Anda ialah ${queueNumber}\nNama:${name}\nMeja:${table}\nSpecial Request:${request}\nMenu Pilihan:${orderDetails.cart.map(item => `${item.item} ${item.addOns} x ${item.quantity} (RM${item.price})`).join('\n')}\nTotal Harga:RM${totalPrice}`);
+                cart = [];
+                updateCartView();
+            })
+            
+            .catch(error => console.error("Error:", error))
+            .finally(() => {
+                submitButton.disabled = false;
+                submitButton.innerHTML = "Submit Order";
+            });
+
+        fetch('https://discordapp.com/api/webhooks/1344888111800385546/Jja0S1EBXS0y1KCaKsHI6Ae6ETKkgrvr4qJ5HbgjCY7hE43S7WnFuTtcVGJ5_vtXJtlY', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: `New Order: ${JSON.stringify(orderDetails)}` })
+        })
+        .then(response => console.log('Order sent to Discord'))
+        .catch(error => console.error('Error sending to Discord:', error));
+    });
+};
+
+
+    </script>
+</head>
+<body>
+    <div class="order-form-container">
+        <h1>SELAMAT DATANG KE RESTORAN AYAM GEPUK</h1>
+        <div class="menu-container">
+            <h2><strong>-Menu-</strong><br><br><br>
+
+    <!-- Filter Section with Icons -->
+    <div class="filter-container">
+        <label><input type="radio" name="filter" value="all" checked>📋All</label>
+        <label><input type="radio" name="filter" value="food">🍽️Food (Set)</label>
+        <label><input type="radio" name="filter" value="Side Dish">🔖Ala-Carte</label>
+        <label><input type="radio" name="filter" value="Air Panas"><i class="fas fa-mug-hot"></i>Air Panas</label>
+        <label><input type="radio" name="filter" value="Air Sejuk"><i class="fas fa-glass-whiskey"></i>Air Sejuk</label>
+        <label><input type="radio" name="filter" value="Little Ngences Food">🍩Little Ngences (Food)</label>
+        <label><input type="radio" name="filter" value="Little Ngences Drink">☕Little Ngences (Drink)</label>
+        <label><input type="radio" name="filter" value="cart">🛒My Cart</label>
+    </div>
+</h2>
+            
+            
+            <!-- Set Ayam Gepuk Peha Kacang -->
+            <div class="menuItem" data-price="13" data-name="Set Ayam Gepuk Peha (Sambal Kacang)" data-category="food">
+                <img src="Set Ayam Gepuk Kacang.jpg" alt="Set Ayam Gepuk Peha (Sambal Kacang)" class="foodImg">
+                <p class="premium-animated">Set Ayam Gepuk Peha (Sambal Kacang) - RM 13.00 </p>
+                <label for="quantity1" >Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+                
+            </div>
+
+            <!-- Set Ayam Gepuk Kepak Kacang -->
+            <div class="menuItem" data-price="12" data-name="Set Ayam Gepuk Kepak (Sambal Kacang)" data-category="food">
+                <img src="Set Ayam Gepuk Kepak Kacang.jpg" alt="Set Ayam Gepuk Kepak (Sambal Kacang)" class="foodImg">
+                <p class="premium-animated">Set Ayam Gepuk Kepak(Sambal Kacang) - RM 12.00 </p>
+                <label for="quantity1" >Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+                
+            </div>
+            
+            
+            <!-- Set Ayam Gepuk Peha-->
+            <div class="menuItem" data-price="11" data-name="Set Ayam Gepuk Peha" data-category="food">
+                <img src="Set Ayam Gepuk.jpg" alt="Set Ayam Gepuk Peha" class="foodImg">
+                <p class="premium-animated">Set Ayam Gepuk Peha - RM 11.00 </p>
+                <label for="quantity1" >Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+                
+            </div>
+            <!-- Set Ayam Gepuk Kepak-->
+            <div class="menuItem" data-price="10" data-name="Set Ayam Gepuk Kepak" data-category="food">
+                <img src="Set Ayam Gepuk Kepak.jpg" alt="Set Ayam Gepuk Kepak" class="foodImg">
+                <p class="red-text">Set Ayam Gepuk Kepak - RM 10.00 </p>
+                <label for="quantity1" >Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+                
+            </div>
+            <!-- Set Lele -->
+            <div class="menuItem" data-price="8" data-name="Set Lele" data-category="food">
+                <img src="Set lele.jpg" alt="Set Lele" class="foodImg">
+                <p class="red-text">Set Lele - RM 8.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Set Daging Balado -->
+            <div class="menuItem" data-price="9" data-name="Set Daging Balado" data-category="food">
+                <img src="Set Daging Balado.jpg" alt="Set Daging Balado" class="foodImg">
+                <p class="red-text">Set Daging Balado - RM 9.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="NasiTambah">Nasi Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="NasiTambah" name="Nasi Tambah" class="addon-checkbox" data-price="2.0">
+                    
+                    <label for="TempeTambah">Tempe Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="TempeTambah" name="Tempe Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="UlamTambah">Ulam Tambah (+RM1.50):</label>
+                    <input type="checkbox" id="UlamTambah" name="Ulam Tambah" class="addon-checkbox" data-price="1.5">
+                    
+                    <label for="SambalTambah">Sambal Tambah (+RM2.00):</label>
+                    <input type="checkbox" id="SambalTambah" name="Sambal Tambah" class="addon-checkbox" data-price="2.0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Bakso -->
+            <div class="menuItem" data-price="7" data-name="Bakso" data-category="food">
+                <img src="Bakso Biasa.jpg" alt="Bakso" class="foodImg">
+                <p class="green-text">Bakso - RM 7.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Bakso Beranak 
+            <div class="menuItem" data-price="10" data-name="Bakso Beranak">
+                <img src="Bakso Beranak.jpg" alt="Bakso Beranak" class="foodImg">
+                <p>Bakso Beranak - RM 10.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Mee">Mee:</label>
+                    <input type="number" id="Mee" name="Mee" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Soon"><br>Soon:</label>
+                    <input type="number" id="Soon" name="Soon" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Maggi"><br>Maggi:</label>
+                    <input type="number" id="Maggi" name="Maggi" value="0" min="0" class="addon-quantity" data-price="0">               
+                </div>
+                <button onclick="addItem()" class="add-to-cart">Add to Cart</button>
+            </div>-->
+            <!-- Bakso Beranak Telur -->
+            <div class="menuItem" data-price="10" data-name="Bakso Beranak Telur" data-category="food">
+                <img src="Bakso Beranak Telur.jpg" alt="Bakso Beranak Telur" class="foodImg">
+                <p class="green-text">Bakso Beranak Telur - RM 10.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+
+            <!-- Bakso Mercun -->
+            <div class="menuItem" data-price="15" data-name="Bakso Mercun" data-category="food">
+                <img src="Bakso Mercun.jpg" alt="Bakso Mercun" class="foodImg">
+                <p class="green-text">Bakso Mercun - RM 15.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Bakso Special -->
+            <div class="menuItem" data-price="10" data-name="Bakso Special" data-category="food">
+                <img src="Bakso Special.jpg" alt="Bakso Special" class="foodImg">
+                <p class="green-text">Bakso Special - RM 10.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Soon">Soon (+RM0.00):</label>
+                    <input type="checkbox" id="Soon" name="Soon" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Mee">Mee (+RM0.00):</label>
+                    <input type="checkbox" id="Mee" name="Mee" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Maggi">Maggi (+RM0.00):</label>
+                    <input type="checkbox" id="Maggi" name="Maggi" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Ayam Sahaja -->
+            <div class="menuItem" data-price="8.5" data-name="Ayam Sahaja" data-category="Side Dish">
+                <p class="green-text">Ayam Sahaja - RM 8.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Peha">Peha (+RM0.00):</label>
+                    <input type="checkbox" id="Peha" name="Peha" class="addon-checkbox" data-price="0">
+                    
+                    <label for="Kepak">Kepak (+RM0.00):</label>
+                    <input type="checkbox" id="Kepak" name="Kepak" class="addon-checkbox" data-price="0">
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+                
+            <!-- Side Dish Lele Sahaja -->
+            <div class="menuItem" data-price="6.5" data-name="Lele Sahaja" data-category="Side Dish">
+                <p class="green-text">Lele Sahaja - RM 6.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Daging Sahaja -->
+            <div class="menuItem" data-price="7" data-name="Daging Sahaja" data-category="Side Dish">
+                <p class="green-text">Daging Sahaja - RM 7.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Bakso Kosong Sahaja -->
+            <div class="menuItem" data-price="5.5" data-name="Bakso Kosong" data-category="Side Dish">
+                <p class="green-text">Bakso Kosong - RM 5.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Side Dish Sambal Sahaja -->
+            <div class="menuItem" data-price="2" data-name="Sambal Gepuk" data-category="Side Dish">
+                <p class="green-text">Sambal Gepuk- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2" data-name="Sambal Balado" data-category="Side Dish">
+                <p class="green-text">Sambal Balado- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air ES Buah -->
+            <div class="menuItem" data-price="5.5" data-name="Es Buah" data-category="Air Sejuk">
+                <p class="blue-text">Es Buah - RM 5.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh O -->
+            <div class="menuItem" data-price="1.5" data-name="Teh O Panas" data-category="Air Panas">
+                <p class="red-text">Teh O Panas - RM 1.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1" >
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.0" data-name="Teh O Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh O Ais - RM 2 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Kopi O -->
+            <div class="menuItem" data-price="1.5" data-name="Kopi O Panas" data-category="Air Panas">
+                <p class="red-text">Kopi O Panas - RM 1.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.0" data-name="Kopi O Ais" data-category="Air Sejuk">
+                <p class="blue-text">Kopi O Ais - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Milo O 
+            <div class="menuItem" data-price="2.5" data-name="Milo O">
+                <p>Milo O - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Nescafe O -->
+            <div class="menuItem" data-price="2.5" data-name="Nescafe O Panas" data-category="Air Panas">
+                <p class="red-text">Nescafe O Panas - RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.0" data-name="Nescafe O Ais" data-category="Air Sejuk">
+                <p class="blue-text">Nescafe O Ais - RM 3.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh -->
+            <div class="menuItem" data-price="2.0" data-name="Teh Panas" data-category="Air Panas">
+                <p class="red-text">Teh Panas- RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.5" data-name="Teh Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh Ais- RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Kopi -->
+            <div class="menuItem" data-price="2.0" data-name="Kopi Panas" data-category="Air Panas">
+                <p class="red-text">Kopi Panas - RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.5" data-name="Kopi Ais" data-category="Air Sejuk">
+                <p class="blue-text">Kopi Ais - RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Milo 
+            <div class="menuItem" data-price="3.0" data-name="Milo">
+                <p>Milo - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Nescafe -->
+            <div class="menuItem" data-price="3.0" data-name="Nescafe Panas" data-category="Air Panas">
+                <p class="red-text">Nescafe Panas - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.5" data-name="Nescafe Ais" data-category="Air Sejuk">
+                <p class="blue-text">Nescafe Ais - RM 3.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Horlick 
+            <div class="menuItem" data-price="4.0" data-name="Horlick">
+                <p>Horlick - RM 4.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Neslo 
+            <div class="menuItem" data-price="3.50" data-name="Neslo">
+                <p>Neslo - RM 3.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas:</label>
+                    <input type="number" id="Panas" name="Panas" value="0" min="0" class="addon-quantity" data-price="0">
+                    <label for="Sejuk"><br>Sejuk:</label>
+                    <input type="number" id="Sejuk" name="Sejuk" value="0" min="0" class="addon-quantity" data-price="0.5">
+                </div>
+                <button class="add-to-cart">Add to Cart</button>
+            </div> -->
+            <!-- Air Sirap -->
+            <div class="menuItem" data-price="1.50" data-name="Sirap Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Panas - RM 1.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.0" data-name="Sirap Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Ais - RM 1.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Selasih -->
+            <div class="menuItem" data-price="1.80" data-name="Sirap Selasih Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Selasih Panas- RM 1.80</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.30" data-name="Sirap Selasih Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Selasih Ais- RM 2.30</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Limau -->
+            <div class="menuItem" data-price="2.00" data-name="Sirap Limau Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Limau Panas - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Sirap Limau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Limau Ais - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Laici -->
+            <div class="menuItem" data-price="2.50" data-name="Sirap Laici Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Laici Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Sirap Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Laici Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh O Limau -->
+            <div class="menuItem" data-price="2.00" data-name="Teh O Limau Panas" data-category="Air Panas">
+                <p class="red-text">Teh O Limau Panas- - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Teh O Limau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh O Limau Ais- - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh O Laici -->
+            <div class="menuItem" data-price="2.50" data-name="Teh O Laici Panas" data-category="Air Panas">
+                <p class="red-text">Teh O Laici Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Teh O Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh O Laici Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Bandung -->
+            <div class="menuItem" data-price="2.00" data-name="Sirap Bandung Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Bandung Panas - RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Sirap Bandung Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Bandung Ais - RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sirap Bandung Cincau -->
+            <div class="menuItem" data-price="2.50" data-name="Sirap Bandung Cincau Panas" data-category="Air Panas">
+                <p class="red-text">Sirap Bandung Cincau Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Sirap Bandung Cincau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sirap Bandung Cincau Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Teh Cincau -->
+            <div class="menuItem" data-price="2.50" data-name="Teh Cincau Panas" data-category="Air Panas">
+                <p class="red-text">Teh Cincau Panas- RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Teh Cincau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Teh Cincau Ais- RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Limau -->
+            <div class="menuItem" data-price="1.50" data-name="Limau Panas" data-category="Air Panas">
+                <p class="red-text">Limau Panas - RM 1.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.00" data-name="Limau Ais" data-category="Air Sejuk">
+                <p class="blue-text">Limau Ais - RM 2.00 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sanquick -->
+            <div class="menuItem" data-price="2.00" data-name="Sanquick Panas" data-category="Air Panas">
+                <p class="red-text">Sanquick Panas - RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.50" data-name="Sanquick Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sanquick Ais - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Sanquick Laici -->
+            <div class="menuItem" data-price="2.50" data-name="Sanquick Laici Panas" data-category="Air Panas">
+                <p class="red-text">Sanquick Laici Panas - RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.00" data-name="Sanquick Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sanquick Laici Ais - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air Limau Laici -->
+            <div class="menuItem" data-price="3.00" data-name="Sanquick Laici Panas" data-category="Air Panas">
+                <p class="red-text">Sanquick Laici Panas - RM 3.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-mug-hot"></i> Hot
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="3.50" data-name="Sanquick Laici Ais" data-category="Air Sejuk">
+                <p class="blue-text">Sanquick Laici Ais - RM 3.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <i class="fas fa-glass-whiskey"></i> Cold
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air ExtraJoss Anggur -->
+            <div class="menuItem" data-price="2.50" data-name="ExtraJoss Anggur Susu" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Anggur Susu- RM 2.50 </p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.00" data-name="ExtraJoss Anggur" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Anggur Gula- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air ExtraJoss Mangga -->
+            <div class="menuItem" data-price="2.50" data-name="ExtraJoss Mangga Susu" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Mangga Susu- RM 2.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="2.00" data-name="ExtraJoss Mangga Gula" data-category="Air Sejuk">
+                <p class="blue-text">ExtraJoss Mangga Gula- RM 2.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Sejuk">Sejuk (+RM0.50):</label>
+                    <input type="checkbox" id="Sejuk" name="Sejuk" class="addon-checkbox" data-price="0.5">
+                    <i class="fas fa-glass-whiskey"></i> Cold
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <!-- Air kosong -->
+            <div class="menuItem" data-price="0.00" data-name="Air Panas"data-category="Air Panas">
+                <p class="red-text">Air Panas - RM 0.00</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                    <label for="Panas">Panas (+RM0.00):</label>
+                    <input type="checkbox" id="Panas" name="Panas" class="addon-checkbox" data-price="0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                    <label for="Suam">Suam (+RM0.00):</label>
+                    <input type="checkbox" id="Suam" name="Suam" class="addon-checkbox" data-price="0.0">
+                    <i class="fas fa-mug-hot"></i> Hot
+                </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+            <div class="menuItem" data-price="0.50" data-name="Air Kosong" data-category="Air Sejuk">
+                <p class="blue-text">Air Kosong - RM 0.50</p>
+                <label for="quantity1">Quantity:</label>
+                <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+                <div class="add-ons">
+                <i class="fas fa-glass-whiskey"></i> Cold
+            </div>
+                <button  onclick="addToCart(this)">Add to Cart</button>
+            </div>
+
+            <!--Coffe Section-->
+
+        <!-- Little Ngences - Buttermilk Chicken with rice -->
+        <div class="menuItem" data-price="10" data-name="Buttermilk Chicken with rice" data-category="Little Ngences Food">
+            <img src="Buttermilk Chicken Rice.jpg" alt="Buttermilk Chicken Rice" class="foodImg">
+            <p class="brown-text">Buttermilk Chicken with rice🍚 - RM 10.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Sweet Chilli Chicken with rice -->
+        <div class="menuItem" data-price="10" data-name="Sweet Chilli Chicken with rice" data-category="Little Ngences Food">
+            <img src="Sweet Chili Chicken Rice.jpg" alt="Sweet Chili Chicken Rice" class="foodImg">
+            <p class="brown-text">Sweet Chilli Chicken with rice🍚 - RM 10.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Soy Garlic Chicken with rice -->
+        <div class="menuItem" data-price="10" data-name="Soy Garlic Chicken with rice" data-category="Little Ngences Food">
+            <p class="brown-text">Soy Garlic Chicken with rice🍚 - RM 10.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Teriyaki Chicken with rice -->
+        <div class="menuItem" data-price="10" data-name="Teriyaki Chicken with rice" data-category="Little Ngences Food">
+            <p class="brown-text">Teriyaki Chicken with rice🍚 - RM 10.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Spaghetti Samyang Chicken -->
+        <div class="menuItem" data-price="12" data-name="Spaghetti Samyang Chicken" data-category="Little Ngences Food">
+            <p class="brown-text">Spaghetti Samyang Chicken🍝 - RM 12.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Spaghetti Tomyam Chicken -->
+        <div class="menuItem" data-price="12" data-name="Spaghetti Tomyam Chicken" data-category="Little Ngences Food">
+            <img src="Tomyam Speghetti Chicken.jpg" alt="Spaghetti Tomyam Chicken" class="foodImg">
+            <p class="brown-text">Spaghetti Tomyam Chicken🍝 - RM 12.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Spaghetti Buttermilk Chicken -->
+        <div class="menuItem" data-price="12" data-name="Spaghetti Buttermilk Chicken" data-category="Little Ngences Food">
+            <img src="Buttermilk Speghetti.jpg" alt="Buttermilk Spaghetti" class="foodImg">
+            <p class="brown-text">Spaghetti Buttermilk Chicken🍝 - RM 12.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Spaghetti Carbonara Chicken -->
+        <div class="menuItem" data-price="12" data-name="Spaghetti Carbonara Chicken" data-category="Little Ngences Food">
+            <p class="brown-text">Spaghetti Carbonara Chicken🍝 - RM 12.0</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Cheese Slice">🧀Cheese Slice (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Cheese Sauce">🥖Cheese Sauce (+RM1.50):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="1.50">
+                
+                <label for="Mozarella Cheese">Mozarella Cheese (+RM3.00):</label>
+                <input type="checkbox" id="Mozarella Cheese" name="Mozarella Cheese" class="addon-checkbox" data-price="3.00">
+
+                <label for="Egg">🥚Egg (+RM1.00):</label>
+                <input type="checkbox" id="Egg" name="Egg" class="addon-checkbox" data-price="1.00">
+
+                <label for="Sausage">🌭Sausage (+RM1.50):</label>
+                <input type="checkbox" id="Sausage" name="Sausage" class="addon-checkbox" data-price="1.50">
+        </div>
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Crispy Chicken Burger -->
+        <div class="menuItem" data-price="9" data-name="Crispy Chicken Burger" data-category="Little Ngences Food">
+            <p class="brown-text">Crispy Chicken Burger🍔 - RM 9.00</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Chicken Burger -->
+        <div class="menuItem" data-price="7" data-name="Chicken Burger" data-category="Little Ngences Food">
+            <p class="brown-text">Chicken Burger🍔 - RM 7.00</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <button  onclick="addToCart(this)">Add to Cart</button>
+        </div>
+        <!-- Little Ngences - Beef Burger -->
+        <div class="menuItem" data-price="7" data-name="Beef Burger" data-category="Little Ngences Food">
+            <p class="brown-text">Beef Burger🍔 - RM 7.00</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+        <!-- Little Ngences - Baby Pancake -->
+        <div class="menuItem" data-price="10" data-name="Baby Pancake" data-category="Little Ngences Food">
+            <p class="brown-text">Baby Pancake🥞 - RM 10.00</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+        <!-- Little Ngences - Croissant -->
+        <div class="menuItem" data-price="6" data-name="Croissant @ Croffle" data-category="Little Ngences Food">
+            <img src="Croffle.jpg" alt="Croffle" class="foodImg">
+            <p class="brown-text">Croissant @ Croffle 🥐 - RM 6.00</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+            <div class="add-ons">
+                <label for="Milk Choco">Milk Choco🍫 (+RM2.00):</label>
+                <input type="checkbox" id="Cheese Slice" name="Cheese Slice" class="addon-checkbox" data-price="2.00">
+                
+                <label for="Choco Chip">Choco Chip🍪 (+RM2.00):</label>
+                <input type="checkbox" id="Cheese Sauce" name="Cheese Sauce" class="addon-checkbox" data-price="2.00">
+        </div>
+        <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+        <!-- Little Ngences - Teobokki -->
+        <div class="menuItem" data-price="7" data-name="Teobokki" data-category="Little Ngences Food">
+            <p class="brown-text">Teobokki🍜 - RM 7.00</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+        <div class="menuItem" data-price="7" data-name="Chicken Popcorn" data-category="Little Ngences Food">
+            <p class="brown-text">Chicken Popcorn🍿 - RM 7.00</p>
+            <label for="quantity1">Quantity:</label>
+            <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="5" data-name="Fries" data-category="Little Ngences Food">
+        <p class="brown-text">Fries🍟 - RM 5.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="6.5" data-name="Cheezy Fries" data-category="Little Ngences Food">
+        <p class="brown-text">Cheezy Fries - RM 6.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="6.0" data-name="Mee Sedap" data-category="Little Ngences Food">
+        <p class="brown-text">Mee Sedap🍳 - RM 6.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="6.0" data-name="Mee Tomyam" data-category="Little Ngences Food">
+        <p class="brown-text">Mee Tomyam🍲 - RM 6.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+
+    <div class="menuItem" data-price="10.0" data-name="Ngences Latte" data-category="Little Ngences Drink">
+        <p class="premium-animated">Ngences Latte - RM 10.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="10.0" data-name="Caramel Macchiato" data-category="Little Ngences Drink">
+        <p class="brown-text">Caramel Macchiato - RM 10.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="9.50" data-name="Vanilla Latte" data-category="Little Ngences Drink">
+        <p class="brown-text">Vanilla Latte - RM 9.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="8.00" data-name="Caffe Latte" data-category="Little Ngences Drink">
+        <p class="brown-text">Caffe Latte - RM 8.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="9.50" data-name="Caffe Mocha" data-category="Little Ngences Drink">
+        <p class="brown-text">Caffe Mocha - RM 9.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="6.00" data-name="Caffe Americano" data-category="Little Ngences Drink">
+        <p class="brown-text">Caffe Americano - RM 6.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="10.50" data-name="Oatmilk Latte" data-category="Little Ngences Drink">
+        <p class="brown-text">Oatmilk Latte - RM 10.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="12.00" data-name="Oatmilk Mocha" data-category="Little Ngences Drink">
+        <p class="brown-text">Oatmilk Mocha - RM 12.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="7.50" data-name="Chocolate" data-category="Little Ngences Drink">
+        <p class="brown-text">Chocolate - RM 7.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="8.00" data-name="Matcha Latte" data-category="Little Ngences Drink">
+        <p class="brown-text">Matcha Latte - RM 8.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="9.50" data-name="Matchogato" data-category="Little Ngences Drink">
+        <p class="premium-animated">Matchogato- RM 9.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="7.50" data-name="Fruity Milk" data-category="Little Ngences Drink">
+        <p class="brown-text">Fruity Milk - RM 7.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="6.00" data-name="Fruity Sparkling" data-category="Little Ngences Drink">
+        <p class="brown-text">Fruity Sparkling - RM 6.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="12.50" data-name="Ngences Coffe" data-category="Little Ngences Drink">
+        <p class="premium-animated">Ngences Coffe- RM 12.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="11.00" data-name="Mocha" data-category="Little Ngences Drink">
+        <p class="brown-text">Mocha - RM 11.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="11.00" data-name="Mocha Chip" data-category="Little Ngences Drink">
+        <p class="brown-text">Mocha Chip - RM 12.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="10.50" data-name="Chocolate Cream" data-category="Little Ngences Drink">
+        <p class="brown-text">Chocolate Cream - RM 10.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="11.50" data-name="Chocolate Cream Chip" data-category="Little Ngences Drink">
+        <p class="brown-text">Chocolate Cream Chip - RM 11.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="11.0" data-name="Matcha Cream" data-category="Little Ngences Drink">
+        <p class="brown-text">Matcha Cream - RM 11.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="12.0" data-name="Matcha Cream Chip" data-category="Little Ngences Drink">
+        <p class="brown-text">Matcha Cream Chip - RM 12.00</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+    <div class="menuItem" data-price="10.50" data-name="Vanilla Cream" data-category="Little Ngences Drink">
+        <p class="brown-text">Vanilla Cream - RM 10.50</p>
+        <label for="quantity1">Quantity:</label>
+        <input type="number" id="quantity1" class="quantity" name="quantity1" value="1" min="1">
+        <div class="add-ons">
+            <label for="Espresso Shot">☕Espresso Shot (+RM2.00):</label>
+            <input type="checkbox" id="Espresso Shot" name="Espresso Shot" class="addon-checkbox" data-price="2.00">
+            
+            <label for="Whipped Cream">🍦 Whipped Cream (+RM1.50):</label>
+            <input type="checkbox" id="Whipped Cream" name="Whipped Cream" class="addon-checkbox" data-price="1.50">
+            
+            <label for="Choc Chip">🍪Choc Chip (+RM1.00):</label>
+            <input type="checkbox" id="Choc Chip" name="Choc Chip" class="addon-checkbox" data-price="1.00">
+
+            <label for="Choc Drizzle">Choc Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Choc Drizzle" name="Choc Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="🍯Caramel Drizzle">Caramel Drizzle (+RM1.00):</label>
+            <input type="checkbox" id="Caramel Drizzle" name="Caramel Drizzle" class="addon-checkbox" data-price="1.00">
+
+            <label for="Syrup/Flavour">Syrup/Flavour (+RM1.50):</label>
+            <input type="checkbox" id="Syrup/Flavour" name="Syrup/Flavour" class="addon-checkbox" data-price="1.50">
+
+            <label for="Oatmilk">🌾Oatmilk (+RM2.50):</label>
+            <input type="checkbox" id="Oatmilk" name="Oatmilk" class="addon-checkbox" data-price="2.50">
+    </div>
+    <button  onclick="addToCart(this)">Add to Cart</button>
+    </div>
+</div>
+    
+        
+        <button id="goToCartBtn" class="cart-button">
+            🛒 Go to Cart <span id="cartCount" class="cart-count" ></span>
+        </button>
+        
+        <div class="cart">
+            <h3>🛒Cart</h3>
+            <div id="cart-items"></div>
+            <p id="total-price">Total: RM0 [Harga yang dipamerkan untuk rujukan sahaja. Terdapat perubahan jika berlaku kesilapan]</p>
+                <input type="text" id="customer-name" placeholder="👤 Name" required>
+                <input type="text" id="table-number" placeholder="🪑 Table No " required><br>
+                <input type="text" id="special-request" placeholder="✏️ Special Request">           
+                <button id= "submit-button" onclick="submitOrder()">Submit Order</button>
+                
+        </div>
+    </div>
+    <div id="notification" class="notification"></div>
+
+    <footer>
+        <a href="customer.html" class="ribbon-button">Monitoring Order[LIVE]</a>
+        <p><b>Little Ngences X Ayam Gepuk Ngences</b></p>
+        <p>&copy; 2024 electricaltechnologymy. All rights reserved.</p>
+        
+        <p> 
+            
+            <a href="https://wa.me/+60176977263">Contact Us</a> |
+            <a href="https://www.instagram.com/littlengencescoffee?igsh=MWZhZmM4YXcyc2Fraw=="target="_blank">Instagram</a> |
+            <a href="https://www.tiktok.com/@little.ngences.co?_t=8nzZDYmHXhg&_r=1"target="_blank">Tiktok</a> |
+            <a href="https://batugajahdev.wixstudio.io/little-ngences"target="_blank">Visit Little Ngences</a>
+        </p>
+    </footer>
+</body>
+</html>
