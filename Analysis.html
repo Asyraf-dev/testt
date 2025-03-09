@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Order Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.3.0/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <style>
+          body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e2d;
+            color: #fff;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1100px;
+            margin: auto;
+            padding: 20px;
+            background: #29293d;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            margin-top: 20px;
+        }
+
+        h1, h2 {
+            margin-bottom: 10px;
+            font-size: 1.5em;
+        }
+
+        /* Filters - Responsive */
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filters select, .filters input {
+            padding: 8px;
+            font-size: 14px;
+            border-radius: 5px;
+            border: none;
+            background-color: #3a3a56;
+            color: white;
+            cursor: pointer;
+            width: 100%;
+            max-width: 200px;
+        }
+
+        /* Stats Cards */
+        .stats {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .card {
+            background: #3a3a56;
+            padding: 15px;
+            border-radius: 8px;
+            width: 45%;
+            text-align: center;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+            font-size: 1em;
+        }
+
+        /* Chart Containers */
+        .chart-container {
+            width: 100%;
+            max-width: 600px;
+            margin: auto;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.3em;
+            }
+
+            .filters {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .filters select, .filters input {
+                width: 90%;
+                max-width: none;
+            }
+
+            .stats {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .card {
+                width: 90%;
+            }
+            h1 {
+            margin-bottom: 30px;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .dashboard-button {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .dashboard-button:hover {
+            background: linear-gradient(135deg, #0056b3, #003d80);
+            transform: scale(1.08);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .button-container {
+                flex-direction: column;
+            }
+        }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="premium-animated"><b>⚜Admin Dashboard⚜</b></h1>
+
+    <div class="button-container">
+        <a href="index.html" class="premium-animated">🏠 Home ||</a>
+        <a href="display.html" class="premium-animated">📋 Order Display ||</a>
+        <a href="analysis.html" class="premium-animated">📊 Analytics ||</a>
+        <a href="customer.html" class="premium-animated">👥 Customer Queue</a>
+    </div>
+
+    <div class="container">
+        
+        
+        <!-- Filters -->
+        <div class="filters">
+            <select id="statusFilter" onchange="applyFilters()">
+                <option value="all">All Orders</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+            <input type="date" id="startDate" onchange="applyFilters()">
+            <input type="date" id="endDate" onchange="applyFilters()">
+            <select id="graphFilter" onchange="toggleGraph()">
+                <option value="all">Show All Graphs</option>
+                <option value="orderChart">Orders Per Hour</option>
+                <option value="itemChart">Most Ordered Items</option>
+            </select>
+            <select id="chartType" onchange="applyFilters()">
+                <option value="bar">Bar Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="pareto">Pareto Chart</option>
+            </select>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="stats">
+            <div class="card">
+                <h2 class="brown-text">Total Orders</h2>
+                <p id="totalOrders">0</p>
+            </div>
+            <div class="card">
+                <h2 class="green-text">Total Revenue</h2>
+                <p>RM<span id="totalRevenue">0.00</span></p>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="chart-container" id="orderChartContainer">
+            <canvas id="orderChart"></canvas>
+        </div>
+        
+        <div class="chart-container" id="itemChartContainer">
+            <canvas id="itemChart"></canvas>
+        </div>
+        
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDf...",
+            authDomain: "testt-c3750.firebaseapp.com",
+            databaseURL: "https://testt-c3750-default-rtdb.firebaseio.com",
+            projectId: "testt-c3750",
+            storageBucket: "testt-c3750.firebasestorage.app",
+            messagingSenderId: "697358376221",
+            appId: "1:697358376221:web:ca6bbc24746e008cdb15f4",
+            measurementId: "G-19EQYC273M"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database().ref("orders");
+
+        let allOrders = [];
+        let orderChart, itemChart;
+
+        db.on("value", snapshot => {
+            if (snapshot.exists()) {
+                allOrders = Object.values(snapshot.val());
+                applyFilters();
+            }
+        });
+
+        function applyFilters() {
+    const statusFilter = document.getElementById("statusFilter").value;
+    const startDate = document.getElementById("startDate").value;
+    const endDate = document.getElementById("endDate").value;
+
+    let filteredOrders = allOrders;
+
+    if (statusFilter !== "all") {
+        filteredOrders = filteredOrders.filter(order => order.status.toLowerCase() === statusFilter);
+    }
+
+    if (startDate && endDate) {
+        filteredOrders = filteredOrders.filter(order => {
+            const orderDate = new Date(order.timestamp).toISOString().split('T')[0];
+            return orderDate >= startDate && orderDate <= endDate;
+        });
+    }
+
+    updateDashboard(filteredOrders);
+}
+
+        function toggleGraph() {
+        const selectedGraph = document.getElementById("graphFilter").value;
+
+        document.getElementById("orderChartContainer").style.display = (selectedGraph === "all" || selectedGraph === "orderChart") ? "block" : "none";
+        document.getElementById("itemChartContainer").style.display = (selectedGraph === "all" || selectedGraph === "itemChart") ? "block" : "none";
+    }
+
+
+    function updateDashboard(orders) {
+    let totalOrders = orders.length;
+    let totalRevenue = 0;
+    let orderTimes = {};
+    let itemCounts = {};
+
+    orders.forEach(order => {
+    totalRevenue += parseFloat(order.totalPrice) || 0;
+    let hour = new Date(order.timestamp).getHours();
+    orderTimes[hour] = (orderTimes[hour] || 0) + 1;
+
+    // Ensure cart is an array before looping
+    if (Array.isArray(order.cart)) {
+        order.cart.forEach(item => {
+            let quantity = parseInt(item.quantity) || 0; // Get item quantity
+            itemCounts[item.item] = (itemCounts[item.item] || 0) + quantity;
+        });
+    }
+});
+
+    document.getElementById("totalOrders").innerText = totalOrders;
+    document.getElementById("totalRevenue").innerText = totalRevenue.toFixed(2);
+
+    updateChart(orderChart, "orderChart", "Orders Per Hour", Object.keys(orderTimes), Object.values(orderTimes));
+    updateChart(itemChart, "itemChart", "Most Ordered Items", Object.keys(itemCounts), Object.values(itemCounts));
+}
+
+
+function updateChart(chartInstance, canvasId, title, labels, data) {
+    if (chartInstance) chartInstance.destroy();
+
+    const ctx = document.getElementById(canvasId).getContext("2d");
+    const chartType = document.getElementById("chartType").value;
+
+    let total = data.reduce((sum, value) => sum + value, 0);
+
+    // Sort data for Pareto (highest first)
+    if (chartType === "pareto") {
+        let sortedData = labels.map((label, index) => ({ label, value: data[index] }))
+                               .sort((a, b) => b.value - a.value);
+
+        labels = sortedData.map(item => item.label);
+        data = sortedData.map(item => item.value);
+
+        let cumulativeSum = 0;
+        let cumulativeData = data.map(value => {
+            cumulativeSum += value;
+            return (cumulativeSum / total) * 100;
+        });
+
+        datasets = [
+            {
+                label: title,
+                data: data,
+                backgroundColor: ["#00c9a7", "#005f73", "#ff7f50", "#ffd700", "#ff69b4"],
+                borderColor: "#ffffff",
+                borderWidth: 2,
+                hoverBackgroundColor: "#00f5d4",
+                order: 1
+            },
+            {
+                label: "Cumulative %",
+                data: cumulativeData,
+                type: "line",
+                borderColor: "#ff7f50",
+                backgroundColor: "rgba(255, 127, 80, 0.3)",
+                borderWidth: 4,
+                pointBackgroundColor: "#ff7f50",
+                pointBorderColor: "#ffffff",
+                pointRadius: 6,
+                fill: false,
+                yAxisID: "percentage",
+                order: 999
+            }
+        ];
+    } else {
+        datasets = [{
+            label: title,
+            data: data,
+            backgroundColor: ["#00c9a7", "#005f73", "#ff7f50", "#ffd700", "#ff69b4"],
+            borderColor: "#ffffff",
+            borderWidth: 2
+        }];
+    }
+
+    chartInstance = new Chart(ctx, {
+        type: chartType === "pareto" ? "bar" : chartType,
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 1500,
+                easing: "easeInOutQuart"
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: title,
+                    font: { size: 20, weight: "bold" },
+                    color: "#ffffff",
+                    padding: 15
+                },
+                legend: {
+                    labels: { color: "#ffffff" }
+                },
+                tooltip: {
+                    backgroundColor: "#29293d",
+                    titleColor: "#ffffff",
+                    bodyColor: "#ffffff",
+                    borderColor: "#00c9a7",
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 6
+                },
+                datalabels: {
+                    color: "#ffffff",
+                    font: { weight: "bold" },
+                    formatter: (value, context) => {
+                        let percentage = ((value / total) * 100).toFixed(1);
+                        return percentage + "%";
+                    },
+                    anchor: "end",
+                    align: "start",
+                    offset: -10
+                }
+            },
+            scales: chartType === "pareto" ? {
+                x: { ticks: { color: "#ffffff" }, grid: { display: false } },
+                y: { ticks: { color: "#ffffff" }, grid: { color: "#3a3a56", lineWidth: 0.5 } },
+                percentage: {
+                    type: "linear",
+                    position: "right",
+                    ticks: { color: "#ff7f50", callback: value => value + "%" },
+                    grid: { drawOnChartArea: false }
+                }
+            } : chartType === "bar" ? {
+                x: { ticks: { color: "#ffffff" }, grid: { display: false } },
+                y: { ticks: { color: "#ffffff" }, grid: { color: "#3a3a56", lineWidth: 0.5 } }
+            } : {}
+        }
+    });
+
+    if (canvasId === "orderChart") orderChart = chartInstance;
+    if (canvasId === "itemChart") itemChart = chartInstance;
+}
+
+    </script>
+</body>
+</html>
+
